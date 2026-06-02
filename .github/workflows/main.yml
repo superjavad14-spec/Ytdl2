@@ -328,7 +328,7 @@ jobs:
               return False
 
           def download_subtitles(video_url, channel_folder, index, vid):
-              """Download subtitles into a separate subtitles/ directory, organized by channel."""
+              """Download fa,en subtitles (separate folder), return True if at least one file saved."""
               base_dir = Path('subtitles')
               subs_dir = base_dir / channel_folder
               subs_dir.mkdir(parents=True, exist_ok=True)
@@ -352,10 +352,12 @@ jobs:
                       if found:
                           for f in found:
                               print(f'   ✅ Subtitle saved: subtitles/{channel_folder}/{f.name}')
+                          return True
                       else:
                           print(f'   ℹ️  No subtitle files generated (may not exist for selected languages).')
               except Exception as e:
                   print(f'   ⚠️ Subtitle download error (continuing): {e}')
+              return False
 
           # -------- Main execution ----------
           print(f'{"="*50}')
@@ -363,6 +365,9 @@ jobs:
           print(f'{"="*50}')
           if SUBTITLES:
               print('📝 Subtitles enabled (fa, en)')
+
+          video_downloaded = False
+          subtitle_downloaded = False
 
           if M == 'search':
               v, _ = gvl(f'ytsearch{MX}:{U}', MX)
@@ -412,6 +417,7 @@ jobs:
                           print(f'   ✅ Downloaded ({size/1e6:.1f}MB)')
                           split_file(fp, SP)
                           ok.append(x['t'])
+                          video_downloaded = True
                       else:
                           print(f'   ❌ Download failed')
                           fl.append(x['t'])
@@ -419,9 +425,9 @@ jobs:
                       print(f'   ❌ Conversion failed')
                       fl.append(x['t'])
 
-                  # Subtitles (separate folder subtitles/<cn>)
                   if SUBTITLES:
-                      download_subtitles(x['u'], cn, i, x['id'])
+                      if download_subtitles(x['u'], cn, i, x['id']):
+                          subtitle_downloaded = True
                   
                   if i < len(v): 
                       print(f'   ⏳ Waiting...')
@@ -431,8 +437,10 @@ jobs:
                   'm': M, 'cd': str(cd), 'ok': len(ok), 'fl': len(fl), 'total': len(v)
               }))
               print(f'\n{"="*50}')
-              print(f'📊 {len(ok)}/{len(v)} downloaded successfully')
-              if fl: print(f'❌ Failed: {fl}')
+              print(f'📊 {len(ok)}/{len(v)} videos downloaded successfully')
+              if fl: print(f'❌ Failed videos: {fl}')
+              if SUBTITLES:
+                  print(f'📝 Subtitles: {"✅ downloaded" if subtitle_downloaded else "ℹ️ none available"}')
               print(f'{"="*50}')
 
           else:
@@ -450,14 +458,27 @@ jobs:
                   fp = cd / f'v_{vid}.{result["e"]}'
                   size = download_file(result['u'], fp)
                   if size:
-                      print(f'✅ Saved to {cn}_videos/ ({size/1e6:.1f}MB)')
+                      print(f'✅ Video saved to {cn}_videos/ ({size/1e6:.1f}MB)')
                       split_file(fp, SP)
+                      video_downloaded = True
+                  else:
+                      print(f'❌ Video download failed')
               else:
-                  print('❌ Failed'); sys.exit(1)
+                  print(f'❌ Video conversion failed')
 
-              # Subtitles (separate folder subtitles/<cn>)
+              # Subtitles (even if video failed)
               if SUBTITLES and vid != 'x':
-                  download_subtitles(U, cn, 1, vid)
+                  if download_subtitles(U, cn, 1, vid):
+                      subtitle_downloaded = True
+
+              # Determine final success
+              if video_downloaded:
+                  print('✅ Process completed successfully (video)')
+              elif SUBTITLES and subtitle_downloaded:
+                  print('✅ Process completed successfully (subtitles only)')
+              else:
+                  print('❌ Failed to download video or subtitles')
+                  sys.exit(1)
           
           PYEOF
 
