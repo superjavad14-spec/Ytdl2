@@ -133,7 +133,6 @@ jobs:
               except: return str(n)
 
           def gv(vid):
-              """Get video info AND channel name from actual video data"""
               try:
                   r = subprocess.run(
                       ['yt-dlp', '--dump-json', '--no-warnings', '--no-check-certificate',
@@ -328,11 +327,13 @@ jobs:
                   return True
               return False
 
-          def download_subtitles(video_url, video_dir, index, vid):
-              """Download fa and en subtitles for a video (ignore missing languages)."""
-              subs_dir = video_dir / 'subtitles'
+          def download_subtitles(video_url, channel_folder, index, vid):
+              """Download subtitles into a separate subtitles/ directory, organized by channel."""
+              base_dir = Path('subtitles')
+              subs_dir = base_dir / channel_folder
               subs_dir.mkdir(parents=True, exist_ok=True)
-              out_tmpl = str(subs_dir / f'{index:03d}_{vid}.%(ext)s')
+              prefix = f'{index:03d}_{vid}'
+              out_tmpl = str(subs_dir / f'{prefix}.%(ext)s')
               cmd = [
                   'yt-dlp', '--skip-download', '--write-subs', '--write-auto-subs',
                   '--sub-lang', 'fa,en', '--convert-subs', 'vtt',
@@ -340,22 +341,19 @@ jobs:
                   '--no-warnings', '--no-check-certificate',
                   video_url
               ]
-              print(f'   📝 Downloading subtitles...')
+              print(f'   📝 Checking subtitles (fa, en) ...')
               try:
                   r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-                  # yt-dlp returns 0 even if no subs found? It might return non-zero; ignore.
-                  if 'has no subtitles' in r.stderr.lower() or 'no subtitle' in r.stderr.lower():
-                      print('   ℹ️  No subtitles available for this video.')
+                  output = (r.stdout + r.stderr).lower()
+                  if 'has no subtitles' in output or 'no subtitle' in output:
+                      print(f'   ℹ️  No subtitles available for this video.')
                   else:
-                      if r.stdout:
-                          print(r.stdout.split('\n')[-2] if len(r.stdout.split('\n'))>1 else '')
-                      # Check what was actually downloaded
-                      downloaded = list(subs_dir.glob(f'{index:03d}_{vid}.*'))
-                      if downloaded:
-                          for f in downloaded:
-                              print(f'   ✅ Subtitle saved: {f.name}')
+                      found = sorted(subs_dir.glob(f'{prefix}.*'))
+                      if found:
+                          for f in found:
+                              print(f'   ✅ Subtitle saved: subtitles/{channel_folder}/{f.name}')
                       else:
-                          print('   ℹ️  No subtitle files generated.')
+                          print(f'   ℹ️  No subtitle files generated (may not exist for selected languages).')
               except Exception as e:
                   print(f'   ⚠️ Subtitle download error (continuing): {e}')
 
@@ -421,9 +419,9 @@ jobs:
                       print(f'   ❌ Conversion failed')
                       fl.append(x['t'])
 
-                  # Subtitles (if enabled)
+                  # Subtitles (separate folder subtitles/<cn>)
                   if SUBTITLES:
-                      download_subtitles(x['u'], cd, i, x['id'])
+                      download_subtitles(x['u'], cn, i, x['id'])
                   
                   if i < len(v): 
                       print(f'   ⏳ Waiting...')
@@ -457,9 +455,9 @@ jobs:
               else:
                   print('❌ Failed'); sys.exit(1)
 
-              # Subtitles (if enabled)
+              # Subtitles (separate folder subtitles/<cn>)
               if SUBTITLES and vid != 'x':
-                  download_subtitles(U, cd, 1, vid)
+                  download_subtitles(U, cn, 1, vid)
           
           PYEOF
 
